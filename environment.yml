@@ -1,0 +1,16 @@
+name: ctseg
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy=1.26
+  - tifffile=2024.8
+  - scipy=1.13
+  - simpleitk=2.4
+  - pyqt=6.7
+  - vtk=9.3
+  - pytest=8.3
+  - pip
+  - pip:
+      - -e .[dev]
+

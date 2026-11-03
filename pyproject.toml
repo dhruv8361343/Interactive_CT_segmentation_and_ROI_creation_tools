@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctseg-toolkit"
+version = "0.1.0"
+description = "Geometry-aware CT volume viewing and segmentation toolkit"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { text = "Proprietary project" }
+authors = [{ name = "CT Segmentation Project" }]
+dependencies = [
+  "numpy>=1.24,<3",
+  "tifffile>=2023.7.10",
+]
+
+[project.optional-dependencies]
+algorithms = ["scipy>=1.10"]
+medical-io = ["SimpleITK>=2.3"]
+ui = ["PyQt6>=6.5", "vtk>=9.2"]
+gpu = ["cupy-cuda13x[ctk]>=14.0,<15"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
+all = [
+  "scipy>=1.10",
+  "SimpleITK>=2.3",
+  "PyQt6>=6.5",
+  "vtk>=9.2",
+]
+
+[project.scripts]
+ctseg = "ctseg.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
