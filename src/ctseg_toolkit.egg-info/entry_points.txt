@@ -1,0 +1,2 @@
+[console_scripts]
+ctseg = ctseg.app:main
