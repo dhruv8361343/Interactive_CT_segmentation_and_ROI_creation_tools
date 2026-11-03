@@ -1,0 +1,160 @@
+Metadata-Version: 2.4
+Name: ctseg-toolkit
+Version: 0.1.0
+Summary: Geometry-aware CT volume viewing and segmentation toolkit
+Author: CT Segmentation Project
+License: Proprietary project
+Requires-Python: <3.14,>=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy<3,>=1.24
+Requires-Dist: tifffile>=2023.7.10
+Provides-Extra: algorithms
+Requires-Dist: scipy>=1.10; extra == "algorithms"
+Provides-Extra: medical-io
+Requires-Dist: SimpleITK>=2.3; extra == "medical-io"
+Provides-Extra: ui
+Requires-Dist: PyQt6>=6.5; extra == "ui"
+Requires-Dist: vtk>=9.2; extra == "ui"
+Provides-Extra: gpu
+Requires-Dist: cupy-cuda13x[ctk]<15,>=14.0; extra == "gpu"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4; extra == "dev"
+Requires-Dist: pytest-cov>=4.1; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Provides-Extra: all
+Requires-Dist: scipy>=1.10; extra == "all"
+Requires-Dist: SimpleITK>=2.3; extra == "all"
+Requires-Dist: PyQt6>=6.5; extra == "all"
+Requires-Dist: vtk>=9.2; extra == "all"
+
+# CT Segmentation Toolkit
+
+Python-first desktop toolkit for loading the professor-provided TIFF reconstruction, viewing orthogonal slices, creating ROI labels, running assisted segmentation operations, and exporting masks. The package separates the NumPy image/label model from the optional PyQt6/VTK interface so it can later be embedded in a host CT application.
+
+## Supplied reconstruction data
+
+The workspace contains `reconstruction\recon0061.tif` through `recon0907.tif`: **847 grayscale, uncompressed, 1000×1000, 16-bit TIFF slices**. The pixel data alone is about **1.7 GB**. The importer validates each slice and streams the stack into a disk-backed `.npy` cache; the labelmap also uses a disk-backed array. Image loading, whole-volume commits, and 3D surface generation run in a single background imaging queue so the Qt event loop stays responsive without competing multi-gigabyte scans.
+
+The TIFF headers do not establish CT/Hounsfield units or the full physical transform. They do contain a scale/offset description. Their X/Y resolution tags are not treated as sample pitch, and they do not provide Z spacing. Pixel data is kept unchanged for viewing and storage, while assisted intensity thresholds apply the recorded scale/offset. Supply a `geometry.json` sidecar in the slice directory or enter the acquisition voxel pitch through **Image → Set TIFF spacing**. Until then, the 3D toolbar marks the 1×1×1 mm display geometry as assumed rather than verified.
+
+The brush-radius control is interpreted in millimeters when voxel spacing is confirmed and in voxels when spacing is unknown. Each slice plane converts the radius per axis so anisotropic voxels do not distort the brush footprint.
+
+The provided slice descriptions contain a `slope` and `offset`. The reader preserves these as calibration metadata and keeps the original unsigned 16-bit pixels unchanged; thresholding uses calibrated values, but the values are not labeled HU because the TIFF description does not establish that unit.
+
+The root workspace may hold research images locally. Do not add source scans to a public repository or CI.
+
+## Install
+
+Python 3.10–3.13 is supported by the package metadata. Create an isolated environment first.
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[all,dev]"
+```
+
+The equivalent Conda environment is described in `environment.yml`. Optional packages are split by role:
+
+- Core TIFF editing: NumPy and `tifffile`.
+- Faster N-D morphology: SciPy (a pure NumPy fallback is included).
+- Medical image formats: SimpleITK.
+- Desktop interface and 3D rendering: PyQt6 and VTK.
+- GPU: 3D rendering uses VTK/OpenGL, and the status strip under the 3D view names the device actually in use (green = NVIDIA, amber = another GPU). On a hybrid-graphics laptop Windows may pick the integrated Intel GPU; run `ctseg --prefer-nvidia-gpu` once (a per-user Windows Graphics setting, no admin rights) and restart to render on the RTX GPU. Undo it with `ctseg --reset-gpu-preference`. Optionally install CuPy with `.\.venv\Scripts\python.exe -m pip install -e ".[gpu]"` to run whole-volume 3D morphology on CUDA (verified bit-identical to the CPU path and about 4–8× faster on an RTX 4060). Thresholding, label masks, and boolean operations stay on the CPU because they are memory-bound and measured faster there; connected-component tracing also stays on the memory-bounded CPU path.
+- Tests/development: pytest and Ruff.
+
+## Run
+
+Open the supplied TIFF slice directory:
+
+```powershell
+.\.venv\Scripts\ctseg.exe reconstruction
+```
+
+Open one TIFF, NIfTI, or NRRD file:
+
+```powershell
+.\.venv\Scripts\ctseg.exe reconstruction\recon0484.tif
+```
+
+Inspect a TIFF file/directory without loading pixels:
+
+```powershell
+.\.venv\Scripts\ctseg.exe --inspect reconstruction
+```
+
+Use `File → Open TIFF slice directory` or `File → Open TIFF/image file` in the GUI. Loading runs in the background; the current image remains usable until the new stack is validated. Navigate with the wheel over any slice to update the synchronized crosshair. The toolbox provides round/square brush and erase, rectangle/ellipse/freehand/polygon ROI tools, assisted operations, undo/redo, labels, ROI definitions, and slice propagation.
+
+Use **File → Import labelmap into current image** to load a TIFF, NRRD, or NIfTI mask as a segmentation overlay. The import checks dimensions and, when available, physical geometry before replacing the current labelmap. **File → Export ROI definitions** and **Import ROI definitions** preserve editable ROI contours as JSON. The ROI manager lets you select an ROI to center the views, rename it, or remove its vector definition without deleting its rasterized label voxels.
+
+For a whole-volume assisted segmentation, select **Whole volume** in the Assisted tools scope. Choose **Threshold preview** and set calibrated lower/upper limits, or choose **Seeded region grow** / **Flood fill**, set limits and connectivity, then click a seed on any orthogonal slice. The candidate is computed across the 3D stack, previewed in all slice views, and committed with one undo step when you choose **Accept preview**. Whole-volume thresholding and morphology use disk-backed/chunked processing for the supplied large stack. Island removal is currently limited to the selected slice.
+
+The 3D pane displays committed segmentation surfaces for the complete label volume. **Segmentation** is enabled by default; use **Refresh** to rebuild surfaces from the current full-volume labelmap, and adjust their opacity independently from the CT volume. Because a labelled structure usually sits *inside* the sample, the **CT** selector defaults to **Auto**: while segmentation surfaces exist the CT is drawn as a transparent "ghost" so every segment stays visible through the whole stack. Choose **Full** for an opaque CT, **Ghost** to force the transparent CT, or **Hidden** to see only the segmentation. Surface generation runs asynchronously and the status strip reports how many segment surfaces are displayed.
+
+To edit directly in 3D, select the active label, enable **3D brush**, choose **Paint** or **Erase**, select a round or square brush, then click the rendered volume or a visible label surface. The surface preview preserves labels smaller than its display downsampling stride. After each click the status bar reports the picked voxel or explains why the click did not produce an edit. Turn the toggle off to return to camera interaction.
+
+The window fits the screen: axial is the large pane with coronal and sagittal below it, all dividers are draggable, and the tools dock scrolls instead of growing the window.
+
+After painting or applying a mask on any orthogonal slice, the crosshair moves to an edited voxel so the same segmentation intersection is visible in the other two slice views. The 3D label surfaces rebuild in a debounced background task; newly painted segments may take a short moment to appear. The histogram in the tools dock shows sampled calibrated intensities; drag across it to set the assisted threshold interval, or click a segment swatch to select that label and double-click it to change its color.
+
+## Project layout
+
+```text
+src/ctseg/
+  core/         Geometry, image/label data, command history, algorithms
+  io/           TIFF first, plus SimpleITK image readers and writers
+  ui/           PyQt6 slice/label/tool/ROI/histogram controls and VTK 3D view
+  app.py        CLI and standalone developer shell entry point
+tests/          Geometry, algorithm, command, TIFF, and optional UI tests
+examples/       Headless import, environment check, host embedding, profiling
+docs/           Objective traceability, phase reports, public interface, phase plan
+```
+
+## Phase implementation map
+
+| Phase | Implemented subsystem | Verification focus |
+|---|---|---|
+| 0 | Package, runtime dependencies, TIFF inspection, off-screen/UI feasibility hooks | TIFF metadata inventory, imports, synthetic image |
+| 1 | `CTVolume`, `VolumeGeometry`, disk-backed TIFF stack import, orthogonal viewers | Slice ordering, axes, anisotropic geometry |
+| 2 | Round/square brush/erase, polygon rasterization, rectangle/ellipse/freehand ROI, bounded commands | Exact masks, boundaries, one undo per stroke |
+| 3 | Threshold previews, connected growth, flood fill, morphology, 2D/3D components, label merge/erase | Known-answer arrays; cancel/accept preview |
+| 4 | Label metadata and bounded command history | Bit-exact undo/redo and lock enforcement |
+| 5 | Nearest-slice and signed-distance interpolation, preview controls | Synthetic keyframes, one-command propagation |
+| 6 | 3D volume renderer, asynchronous label surfaces, 3D paint/erase, cross-view recentering | Coordinate footprint and 2D/3D synchronization |
+| 7 | Operation profiling example and optional optimization boundary | Reproducible timing and unchanged results |
+| 8 | TIFF/JSON/NRRD/NIfTI/raw I/O, package API, host example | Geometry and data round trips |
+
+The phase details, end-to-end pipelines, architecture, and Mermaid flowcharts are in [the final architecture plan](PROJECT_ARCHITECTURE_AND_PHASED_PLAN.md).
+
+Objective-by-objective status against the attached project brief is tracked in [docs/OBJECTIVE_TRACEABILITY.md](docs/OBJECTIVE_TRACEABILITY.md), including selected limitations and acceptance still requiring real target hardware.
+
+## Run tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\ruff.exe check src tests examples
+```
+
+GUI smoke tests set `QT_QPA_PLATFORM=offscreen`; GPU rendering tests are kept separate from deterministic core tests because rendering support depends on the host driver.
+
+On Windows, VTK's Win32 OpenGL render window cannot create a valid hardware pixel format under Qt's `offscreen` platform plugin. In that test/headless mode the application keeps 2D functionality available and displays a clear 3D-unavailable message; use a normal graphical Windows session with a working OpenGL driver for the interactive 3D renderer.
+
+## Geometry sidecar
+
+For a TIFF stack with scanner metadata not encoded in OME-TIFF, create `reconstruction\geometry.json`:
+
+```json
+{
+  "schema_version": 1,
+  "axes": "ZYX",
+  "spacing_mm_xyz": [0.5, 0.5, 1.0],
+  "origin_mm_lps_xyz": [0.0, 0.0, 0.0],
+  "direction_lps_row_major": [
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
+  ],
+  "intensity_unit": "unknown"
+}
+```
+
+The values are examples only; use acquisition metadata for the actual scan. TIFF image resolution tags do not by themselves define slice spacing or prove Hounsfield Units.
