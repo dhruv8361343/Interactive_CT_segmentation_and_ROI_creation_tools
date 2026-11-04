@@ -23,10 +23,7 @@ py -3.10 -m venv .venv
 - Desktop interface and 3D rendering: PyQt6 and VTK.
 - GPU: 3D rendering uses VTK/OpenGL, and the status strip under the 3D view names the device actually in use (green = NVIDIA, amber = another GPU). On a hybrid-graphics laptop Windows may pick the integrated Intel GPU; run `ctseg --prefer-nvidia-gpu` once (a per-user Windows Graphics setting, no admin rights) and restart to render on the RTX GPU. Undo it with `ctseg --reset-gpu-preference`. Optionally install CuPy with `.\.venv\Scripts\python.exe -m pip install -e ".[gpu]"` to run whole-volume 3D morphology on CUDA (verified bit-identical to the CPU path and about 4–8× faster on an RTX 4060). Thresholding, label masks, and boolean operations stay on the CPU because they are memory-bound and measured faster there; connected-component tracing also stays on the memory-bounded CPU path.
 - Tests/development: pytest and Ruff.
-
-## Dataset link
-https://drive.google.com/drive/folders/1u8XNslTaG7GaVbkpvLgoG9_bFPLqPKQp?usp=sharing
-
+
 ## Pre print article
 https://drive.google.com/file/d/1a5mlUe76LFBY9Ge_JB8-f3C80cBobLUb/view?usp=sharing
 
